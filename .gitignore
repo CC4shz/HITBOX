@@ -1,198 +1,215 @@
-local Libraries = loadstring(game:HttpGet("https://raw.githubusercontent.com/Xenicode/Roblox/main/Source"))()
-local Vape = Libraries:Create({
-    Name = "Vape UI",
-    Title = "Vape UI",
-    LoadingTitle = "Loading...",
-    LoadingSubtitle = "by p0znet",
-    Configuration = {
-        BackgroundTransparency = 1,
-        BorderColor = Color3.new(0, 0, 0),
-        CloseColor = Color3.new(0, 0, 0),
-        MinimizeColor = Color3.new(0, 0, 0),
-        ResizeColor = Color3.new(0, 0, 0)
-    },
-    Size = UDim2.new(0, 500, 0, 400),
-    Position = UDim2.new(0.5, -250, 0.5, -200)
-})
+local player = game.Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
-local MainTab = Vape:CreateTab("Main")
-local PlayerTab = Vape:CreateTab("Player")
-local MiscTab = Vape:CreateTab("Misc")
+-- Load the GUI library
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/UI-Libs/main/Vape.txt"))()
+
+-- Create the main frame for the GUI
+local mainFrame = UI:CreateWindow("sillyware", 500, 400)
+
+-- Create Tabs
+local mainTab = mainFrame:CreateTab("Main")
+local playerTab = mainFrame:CreateTab("Player")
+local miscTab = mainFrame:CreateTab("Misc")
+local visualsTab = mainFrame:CreateTab("Visuals")
 
 -- Main Tab
-local HitboxToggle = MainTab:Create("Hitbox")
-HitboxToggle:Toggle({
-    Text = "Hitbox",
-    Flag = "HitboxToggle",
-    Callback = function(value)
-        local Player = game.Players.LocalPlayer
-        local Character = Player.Character or Player.CharacterAdded:Wait()
-        local Humanoid = Character:WaitForChild("Humanoid")
-        Humanoid.WalkSpeed = value and 24 or 16
-    end
-})
-MainTab:Create("Text", {Text = "Hitbox Size:"})
-local HitboxSizeSlider = MainTab:Create("Slider", {
-    Min = 10,
-    Max = 100,
-    Default = 24,
-    Flag = "HitboxSize",
-    Callback = function(value)
-        local Player = game.Players.LocalPlayer
-        local Character = Player.Character or Player.CharacterAdded:Wait()
-        local Humanoid = Character:WaitForChild("Humanoid")
-        Humanoid.WalkSpeed = value
-    end
-})
-local HitboxVisibleToggle = MainTab:Create("Toggle", {
-    Text = "Visible",
-    Flag = "HitboxVisible",
-    Callback = function(value)
-        local Player = game.Players.LocalPlayer
-        local Character = Player.Character or Player.CharacterAdded:Wait()
-        local Humanoid = Character:WaitForChild("Humanoid")
-
-        if value then
-            local HitboxPart = Instance.new("Part")
-            HitboxPart.Size = Vector3.new(HitboxSizeSlider.Value, 1, HitboxSizeSlider.Value)
-            HitboxPart.Position = HumanoidRootPart.Position
-            HitboxPart.CanCollide = false
-            HitboxPart.Anchored = true
-            HitboxPart.Color = Color3.new(1, 0, 0)
-            HitboxPart.Parent = workspace
-        else
-            for _, v in ipairs(workspace:GetChildren()) do
-                if v.Name == "HitboxPart" then
-                    v:Destroy()
-                end
-            end
+local hitboxToggle = mainTab:CreateToggle("Hitbox Expander", false, function(state)
+    local function extendHitbox(player)
+    for _, partName in ipairs(defaultBodyParts) do
+        local part = player.Character and (player.Character:FindFirstChild(partName) or findClosestPart(player, partName))
+        if part and part:IsA("BasePart") then
+            savedPart(player, part)
+            part.CanCollide = not noCollisionEnabled
+            part.Transparency = hitboxTransparency / 10
+            part.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
         end
     end
-})
-local NoCollisionToggle = MainTab:Create("Toggle", {
-    Text = "No Collision",
-    Flag = "NoCollision",
-    Callback = function(value)
-        local Player = game.Players.LocalPlayer
-        local Character = Player.Character or Player.CharacterAdded:Wait()
-        local Humanoid = Character:WaitForChild("Humanoid")
+end
 
-        Humanoid.CollisionCounterweight.CanCollide = not value
+local function isEnemy(player)
+    if teamCheck == "FFA" or teamCheck == "Everyone" then
+        return true
     end
-})
+    local localPlayerTeam = LocalPlayer.Team
+    return player.Team ~= localPlayerTeam
+end
+
+local function shouldExtendHitbox(player)
+    return isEnemy(player)
+end
+
+local function updateHitboxes()
+    for _, v in ipairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+            if shouldExtendHitbox(v) then
+                extendHitbox(v)
+            else
+                restoredPart(v)
+    end
+end)
+
+local hitboxSizeSlider = mainTab:CreateSlider("Hitbox Size", 1, 100, 1, function(size)
+    tab:Slider("Hitbox Size", 1, 100, 1, function(value)
+    hitboxSize = value
+    if hitboxEnabled then
+        updateHitboxes()
+    end
+end)
+
+local hitboxCollisionToggle = mainTab:CreateToggle("Hitbox Collision", true, function(state)
+    noCollisionEnabled = enabled
+    WarningText.Visible = enabled
+    coroutine.wrap(function()
+        while noCollisionEnabled do
+            if hitboxEnabled then
+                updateHitboxes()
+            end
+            task.wait(0.01)
+        end
+        if hitboxEnabled then
+            updateHitboxes()
+        end
+    end)()
+end)
+end)
 
 -- Player Tab
-local FlyToggle = PlayerTab:Create("Toggle", {
-    Text = "Fly",
-    Flag = "FlyToggle",
-    Callback = function(value)
-        local Player = game.Players.LocalPlayer
-        local Character = Player.Character or Player.CharacterAdded:Wait()
-        local Humanoid = Character:WaitForChild("Humanoid")
-
-        local Flying = false
-        local FlightSpeed = 50
-
-        local function Fly()
-            if not Flying then return end
-            local Velocity, Position = HumanoidRootPart.Velocity, HumanoidRootPart.Position
-            Velocity = Vector3.new(Velocity.X, Velocity.Y + FlightSpeed, Velocity.Z)
-            Position = Position + Velocity * 0.16667
-            HumanoidRootPart.Velocity, HumanoidRootPart.Position = Velocity, Position
-        end
-
-        local function On descendantAdded(m, c)
-            if c:IsA("BasePart") then
-                c.AncestryChanged:Connect(function()
-                    if c.Parent == nil then
-                        On.descendantAdded:disconnect()
-                    end
-                end)
-            end
-        end
-
-        local function FlyConnection()
-            if Flying then
-                repeat
-                    task.wait()
-                    Fly()
-                until not Flying
-            end
-        end
-
-        local function SetFlying(value)
-            Flying = value
-            if value then
-                for i, v in ipairs(Character:GetDescendants()) do
-                    On[v, On.descendantAdded]
-                end
-                task.spawn(FlyConnection)
-            else
-                Flying = false
-            end
-        end
-
-        SetFlying(value)
+local flyToggle = playerTab:CreateToggle("C-Frame Fly", false, function(state)
+    if state then
+        local function enableFly()
+    flying = true
+    while flying do
+        humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.new(0, flySpeed, 0)
+        wait(0.1)
     end
-})
-local FlyKeybindButton = PlayerTab:Create("Button", {
-    Text = "Set Fly Keybind",
-    Callback = function()
-        local KeybindsModule = loadstring(game:HttpGet("https://pastebin.com/raw/DXYAwJLh"))()
-        local FlyKeybind = KeybindsModule:CreateKeybind({
-            HoldDuration = 0.5,
-            Distance = 10,
-            Callback = function()
-                FlyToggle:Set(true)
-            end,
-            KeybindName = "Fly"
-        })
+end
+    else
+        local function disableFly()
+    flying = false
+end
+
     end
-})
+end)
+
+local keybindButton = playerTab:CreateButton("Change Fly Keybind", function()
+    local function setKeybind(input)
+    local newKey = Enum.KeyCode[input:upper()]
+    if newKey then
+        userKeybind = newKey
+        return "Keybind set to " .. input:upper()
+    else
+        return "Invalid key"
+    end
+end
+
+end)
+
+local speedSlider = playerTab:CreateSlider("Fly Speed", 1, 175, 1, function(speed)
+    local function updateFlySpeed(value)
+    flySpeed = value
+end
+
+end)
 
 -- Misc Tab
-local InfiniteJumpToggle = MiscTab:Create("Toggle", {
-    Text = "Infinite Jump",
-    Flag = "InfiniteJump",
-    Callback = function(value)
-        local Player = game.Players.LocalPlayer
-        local Character = Player.Character or Player.CharacterAdded:Wait()
-        local Humanoid = Character:WaitForChild("Humanoid")
+local noclipToggle = miscTab:CreateToggle("Noclip", false, function(state)
+    local function toggleNoclip()
+    noclipEnabled = not noclipEnabled
 
-        if value then
-            Humanoid.JumpPower = math.huge
-        else
-            Humanoid.JumpPower = 50
+    if noclipEnabled then
+        game:GetService("RunService").Stepped:Connect(function()
+            if noclipEnabled then
+                for _, part in pairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+end
+
+end)
+
+local infiniteJumpToggle = miscTab:CreateToggle("Infinite Jump", false, function(state)
+    local function toggleInfiniteJump()
+    infiniteJumpEnabled = not infiniteJumpEnabled
+    if infiniteJumpEnabled then
+        game:GetService("UserInputService").JumpRequest:Connect(function()
+            if infiniteJumpEnabled then
+                game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    end
+end
+
+end)
+
+-- Visuals Tab
+local espButton = visualsTab:CreateButton("Toggle ESP (Names & Distance)", function()
+    local function toggleESP()
+    espEnabled = not espEnabled
+
+    for _, otherPlayer in pairs(game.Players:GetPlayers()) do
+        if otherPlayer ~= player then
+            local character = otherPlayer.Character
+            if character then
+                local head = character:FindFirstChild("Head")
+                if head then
+                    local billboardGui = head:FindFirstChild("ESPTag")
+                    
+                    if espEnabled then
+                        -- Create ESP if it doesn't exist
+                        if not billboardGui then
+                            billboardGui = Instance.new("BillboardGui")
+                            billboardGui.Name = "ESPTag"
+                            billboardGui.Adornee = head
+                            billboardGui.Size = UDim2.new(4, 0, 1, 0)
+                            billboardGui.AlwaysOnTop = true
+                            
+                            local textLabel = Instance.new("TextLabel")
+                            textLabel.Parent = billboardGui
+                            textLabel.Size = UDim2.new(1, 0, 1, 0)
+                            textLabel.BackgroundTransparency = 1
+                            textLabel.Text = otherPlayer.Name
+                            textLabel.TextColor3 = Color3.new(1, 1, 1) -- White text
+                            textLabel.TextScaled = true
+                            
+                            billboardGui.Parent = head
+                        end
+                    else
+                        -- Remove ESP if it exists
+                        if billboardGui then
+                            billboardGui:Destroy()
+                        end
+                    end
+                end
+            end
         end
     end
-})
-local NoClipToggle = MiscTab:Create("Toggle", {
-    Text = "No Clip",
-    Flag = "NoClip",
-    Callback = function(value)
-        local Player = game.Players.LocalPlayer
-        local Character = Player.Character or Player.CharacterAdded:Wait()
-        local Humanoid = Character:WaitForChild("Humanoid")
+end
 
-        if value then
-            local old_scripting_upvalues
-            old_scripting_upvalues = get_script_upvalues(script)
-            HookFunction(old_scripting_upvalues[5].upvalues["SetPrimaryPartCFrame"])
+end)
 
-            local old_scripting_source_upvalues, old_scripting_source, upvalues_pebcyscauya_setterfcn_upvalues_setterfcn_upvalues_client
-            old_scripting_source_upvalues, old_scripting_source, upvalues_pebcyscauya_setterfcn_upvalues_setterfcn_upvalues_client =
-              get_script_upvalues(script.Source; path) -- ModuleScript | Source
-            HookFunction(upvalues_pebcyscauya_setterfcn_upvalues_setterfcn_upvalues_client[2])
-            HookFunction(old_scripting_source_upvalues[2].upvalues["GetCharacterPhysicsService"])
-        else
-            if old_scripting_upvalues then
-                UnhookFunction(old_scripting_upvalues[5].upvalues["SetPrimaryPartCFrame"])
-            end
+local guiToggleButton = visualsTab:CreateButton("Change GUI Keybind", function()
+    local function toggleGui()
+    gui.Enabled = not gui.Enabled
+end
 
-            if old_scripting_source_upvalues then
-                UnhookFunction(upvalues_pebcyscauya_setterfcn_upvalues_setterfcn_upvalues_client[2])
-                UnhookFunction(old_scripting_source_upvalues[2].upvalues["GetCharacterPhysicsService"])
-            end
-        end
+-- Function to update keybind
+local function setKeybind(input)
+    local newKey = Enum.KeyCode[input:upper()]
+    if newKey then
+        userKeybind = newKey
+        return "Keybind set to " .. input:upper()
+    else
+        return "Invalid key"
     end
-})
+end
+
+
+end)
+
+-- Show the GUI
+mainFrame:Show()
