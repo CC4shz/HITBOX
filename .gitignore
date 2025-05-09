@@ -2,9 +2,9 @@
 local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/refs/heads/main/source.lua"))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "Criminality Hub",
+    Name = "Sillyware Trying To Be Universal",
     LoadingTitle = "Criminality Hub",
-    LoadingSubtitle = "by YourNameHere",
+    LoadingSubtitle = "by Sillyunderscore | Discord",
     ConfigurationSaving = {
         Enabled = false,
         FolderName = nil,
