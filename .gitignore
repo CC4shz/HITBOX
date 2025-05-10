@@ -255,3 +255,119 @@ PlayerTab:CreateToggle({
         end
     end
 })
+
+-- Target Tab (Updated with Fling, Spectate, and Teleport Features)
+local TargetTab = Window:CreateTab("Target", 4483362458)
+
+local selectedPlayerName = ""
+local flingEnabled = false
+local matchedPlayer = nil
+
+-- Create the Input Box for Player Name
+TargetTab:CreateTextbox({
+    Name = "Target Player (DisplayName/Username)",
+    Text = "",
+    Callback = function(input)
+        local foundPlayer = nil
+        for _, player in ipairs(game.Players:GetPlayers()) do
+            if player.DisplayName:lower():find(input:lower()) or player.Name:lower():find(input:lower()) then
+                foundPlayer = player
+                break
+            end
+        end
+
+        if foundPlayer then
+            matchedPlayer = foundPlayer
+            Rayfield:Notify({
+                Title = "Target Matched",
+                Content = "Player: " .. matchedPlayer.DisplayName,
+                Duration = 3
+            })
+        else
+            matchedPlayer = nil
+            Rayfield:Notify({
+                Title = "Player Not Found",
+                Content = "No matching player found.",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Teleport Button to Player
+TargetTab:CreateButton({
+    Name = "Teleport to Target",
+    Callback = function()
+        if matchedPlayer then
+            local targetCharacter = matchedPlayer.Character
+            if targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart") then
+                game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = targetCharacter.HumanoidRootPart.CFrame
+                Rayfield:Notify({
+                    Title = "Teleported",
+                    Content = "You have been teleported to " .. matchedPlayer.DisplayName,
+                    Duration = 3
+                })
+            end
+        else
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "No target player selected!",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Fling Button
+TargetTab:CreateButton({
+    Name = "Fling Target",
+    Callback = function()
+        if matchedPlayer then
+            local targetCharacter = matchedPlayer.Character
+            if targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart") then
+                local bodyVelocity = Instance.new("BodyVelocity")
+                bodyVelocity.MaxForce = Vector3.new(100000, 100000, 100000)
+                bodyVelocity.Velocity = (targetCharacter.HumanoidRootPart.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).unit * 1000
+                bodyVelocity.Parent = targetCharacter.HumanoidRootPart
+                wait(0.1)
+                bodyVelocity:Destroy()
+                Rayfield:Notify({
+                    Title = "Flinged",
+                    Content = "You have flung " .. matchedPlayer.DisplayName,
+                    Duration = 3
+                })
+            end
+        else
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "No target player selected!",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Spectate Button
+TargetTab:CreateButton({
+    Name = "Spectate Target",
+    Callback = function()
+        if matchedPlayer then
+            local targetCharacter = matchedPlayer.Character
+            if targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart") then
+                Camera.CameraSubject = targetCharacter.HumanoidRootPart
+                Camera.CameraType = Enum.CameraType.Attach
+                Rayfield:Notify({
+                    Title = "Spectating",
+                    Content = "You are now spectating " .. matchedPlayer.DisplayName,
+                    Duration = 3
+                })
+            end
+        else
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "No target player selected!",
+                Duration = 3
+            })
+        end
+    end
+})
