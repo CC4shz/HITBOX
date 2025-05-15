@@ -247,64 +247,6 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- CFrame Walkspeed
-local cframeSpeedEnabled = false
-local cframeSpeed = 30
-local moveKeys = {W = false, A = false, S = false, D = false}
-local userInput = game:GetService("UserInputService")
-local runService = game:GetService("RunService")
-
-local keybind = Enum.KeyCode.LeftAlt -- Change this default key if needed
-
-local function getDirectionVector()
-    local camera = workspace.CurrentCamera
-    local moveDir = Vector3.zero
-    if moveKeys.W then moveDir += camera.CFrame.LookVector end
-    if moveKeys.S then moveDir -= camera.CFrame.LookVector end
-    if moveKeys.A then moveDir -= camera.CFrame.RightVector end
-    if moveKeys.D then moveDir += camera.CFrame.RightVector end
-    return moveDir.Unit
-end
-
-runService.Heartbeat:Connect(function()
-    if cframeSpeedEnabled then
-        local character = game.Players.LocalPlayer.Character
-        if character and character:FindFirstChild("HumanoidRootPart") then
-            local dir = getDirectionVector()
-            if dir.Magnitude > 0 then
-                character.HumanoidRootPart.CFrame = character.HumanoidRootPart.CFrame + dir * (cframeSpeed * runService.Heartbeat:Wait())
-            end
-        end
-    end
-end)
-
-userInput.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    local key = input.KeyCode.Name
-    if moveKeys[key] ~= nil then moveKeys[key] = true end
-    if input.KeyCode == keybind then
-        cframeSpeedEnabled = not cframeSpeedEnabled
-    end
-end)
-
-userInput.InputEnded:Connect(function(input, gpe)
-    if gpe then return end
-    local key = input.KeyCode.Name
-    if moveKeys[key] ~= nil then moveKeys[key] = false end
-end)
-
-MiscTab:Toggle("Enable CFrame Walkspeed", function(t)
-    cframeSpeedEnabled = t
-end)
-
-MiscTab:Slider("Walkspeed", 10, 200, function(v)
-    cframeSpeed = v
-end)
-
-MiscTab:Dropdown("Change CFrame Walkspeed Keybind", {"LeftAlt", "RightAlt", "Q", "E", "Z", "X"}, function(choice)
-    keybind = Enum.KeyCode[choice]
-end)
-
 LocalPlayer.CharacterAdded:Connect(function(char)
     Character = char
     Humanoid = char:WaitForChild("Humanoid")
