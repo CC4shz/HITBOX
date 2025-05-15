@@ -28,15 +28,9 @@ local function applyHitboxSettings()
     end
 end
 
-MainTab:Toggle("Enable Hitbox Expander", function(state)
+MainTab:Toggle("Enable Hitbox Expander SIZE: 20", function(state)
     hitboxEnabled = state
     applyHitboxSettings()
-end)
-
-MainTab:Slider("Hitbox Size", 1, 20, hitboxSize, function(value)
-    print("Hitbox Size slider changed to:", value)
-    hitboxSize = value
-    if hitboxEnabled then applyHitboxSettings() end
 end)
 
 MainTab:Toggle("No Collision", function(state)
