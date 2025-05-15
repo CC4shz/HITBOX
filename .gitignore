@@ -256,118 +256,90 @@ PlayerTab:CreateToggle({
     end
 })
 
--- Target Tab (Updated with Fling, Spectate, and Teleport Features)
+-- Target Tab (Updated: Teleport, View, and Unview Target)
 local TargetTab = Window:CreateTab("Target", 4483362458)
 
-local selectedPlayerName = ""
-local flingEnabled = false
 local matchedPlayer = nil
 
--- Create the Input Box for Player Name
 TargetTab:CreateTextbox({
     Name = "Target Player (DisplayName/Username)",
     Text = "",
     Callback = function(input)
-        local foundPlayer = nil
-        for _, player in ipairs(game.Players:GetPlayers()) do
+        matchedPlayer = nil
+        for _, player in ipairs(Players:GetPlayers()) do
             if player.DisplayName:lower():find(input:lower()) or player.Name:lower():find(input:lower()) then
-                foundPlayer = player
+                matchedPlayer = player
+                Rayfield:Notify({
+                    Title = "Target Found",
+                    Content = "Matched: " .. player.DisplayName,
+                    Duration = 3
+                })
                 break
             end
         end
-
-        if foundPlayer then
-            matchedPlayer = foundPlayer
+        if not matchedPlayer then
             Rayfield:Notify({
-                Title = "Target Matched",
-                Content = "Player: " .. matchedPlayer.DisplayName,
-                Duration = 3
-            })
-        else
-            matchedPlayer = nil
-            Rayfield:Notify({
-                Title = "Player Not Found",
-                Content = "No matching player found.",
+                Title = "No Match",
+                Content = "Couldn't find a matching player.",
                 Duration = 3
             })
         end
     end
 })
 
--- Teleport Button to Player
+-- Teleport to Target
 TargetTab:CreateButton({
     Name = "Teleport to Target",
     Callback = function()
-        if matchedPlayer then
-            local targetCharacter = matchedPlayer.Character
-            if targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart") then
-                game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = targetCharacter.HumanoidRootPart.CFrame
-                Rayfield:Notify({
-                    Title = "Teleported",
-                    Content = "You have been teleported to " .. matchedPlayer.DisplayName,
-                    Duration = 3
-                })
-            end
+        if matchedPlayer and matchedPlayer.Character and matchedPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = matchedPlayer.Character.HumanoidRootPart.CFrame
+            Rayfield:Notify({
+                Title = "Teleported",
+                Content = "You teleported to " .. matchedPlayer.DisplayName,
+                Duration = 3
+            })
         else
             Rayfield:Notify({
-                Title = "Error",
-                Content = "No target player selected!",
+                Title = "Teleport Failed",
+                Content = "No valid target selected.",
                 Duration = 3
             })
         end
     end
 })
 
--- Fling Button
+-- View (Spectate) Target
 TargetTab:CreateButton({
-    Name = "Fling Target",
+    Name = "View Target",
     Callback = function()
-        if matchedPlayer then
-            local targetCharacter = matchedPlayer.Character
-            if targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart") then
-                local bodyVelocity = Instance.new("BodyVelocity")
-                bodyVelocity.MaxForce = Vector3.new(100000, 100000, 100000)
-                bodyVelocity.Velocity = (targetCharacter.HumanoidRootPart.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).unit * 1000
-                bodyVelocity.Parent = targetCharacter.HumanoidRootPart
-                wait(0.1)
-                bodyVelocity:Destroy()
-                Rayfield:Notify({
-                    Title = "Flinged",
-                    Content = "You have flung " .. matchedPlayer.DisplayName,
-                    Duration = 3
-                })
-            end
+        if matchedPlayer and matchedPlayer.Character and matchedPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            Camera.CameraSubject = matchedPlayer.Character.HumanoidRootPart
+            Camera.CameraType = Enum.CameraType.Attach
+            Rayfield:Notify({
+                Title = "Viewing",
+                Content = "You are now spectating " .. matchedPlayer.DisplayName,
+                Duration = 3
+            })
         else
             Rayfield:Notify({
-                Title = "Error",
-                Content = "No target player selected!",
+                Title = "View Failed",
+                Content = "No valid target to spectate.",
                 Duration = 3
             })
         end
     end
 })
 
--- Spectate Button
+-- Unview Target (Reset camera)
 TargetTab:CreateButton({
-    Name = "Spectate Target",
+    Name = "Unview Target",
     Callback = function()
-        if matchedPlayer then
-            local targetCharacter = matchedPlayer.Character
-            if targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart") then
-                Camera.CameraSubject = targetCharacter.HumanoidRootPart
-                Camera.CameraType = Enum.CameraType.Attach
-                Rayfield:Notify({
-                    Title = "Spectating",
-                    Content = "You are now spectating " .. matchedPlayer.DisplayName,
-                    Duration = 3
-                })
-            end
-        else
-            Rayfield:Notify({
-                Title = "Error",
-                Content = "No target player selected!",
-                Duration = 3
-            })
-        end
+        Camera.CameraSubject = LocalPlayer.Character:FindFirstChild("Humanoid") or LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
+        Camera.CameraType = Enum.CameraType.Custom
+        Rayfield:Notify({
+            Title = "Camera Reset",
+            Content = "You are no longer spectating.",
+            Duration = 3
+        })
     end
 })
