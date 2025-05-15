@@ -7,7 +7,7 @@ local MainTab = Window:Tab("Main", true)
 MainTab:Label("Hitbox Expander")
 
 local hitboxEnabled = false
-local hitboxSize = 15
+local hitboxSize = 20
 local hitboxTransparency = 0.5
 local hitboxNoCollision = false
 
