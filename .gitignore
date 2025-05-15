@@ -1,345 +1,253 @@
--- Official Rayfield Initialization
-local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/refs/heads/main/source.lua"))()
+-- Load Impact UI
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/NeverJar/ImpactUI/main/ImpactUI.lua"))()
+local Window = Library:Create("Sillyware", "Universal")
 
-local Window = Rayfield:CreateWindow({
-    Name = "Sillyware Trying To Be Universal",
-    LoadingTitle = "Criminality Hub",
-    LoadingSubtitle = "by Sillyunderscore | Discord",
-    ConfigurationSaving = {
-        Enabled = false,
-        FolderName = nil,
-        FileName = "CriminalityConfig"
-    },
-    Discord = {
-        Enabled = false,
-        Invite = "",
-        RememberJoins = false
-    },
-    KeySystem = false
-})
+-- Main Tab: Hitbox Expander
+local MainTab = Window:Tab("Main", true)
+MainTab:Label("Hitbox Expander")
 
--- Hitbox Logic
 local hitboxEnabled = false
-local hitboxSize = 10
-local hitboxCollidable = false
-local hitboxConnection
+local hitboxSize = 15
+local hitboxTransparency = 0.5
+local hitboxNoCollision = false
 
-local MainTab = Window:CreateTab("Main", 4483362458)
-
-MainTab:CreateToggle({
-    Name = "Hitbox Expander",
-    CurrentValue = false,
-    Callback = function(state)
-        hitboxEnabled = state
-        if state then
-            hitboxConnection = game:GetService("RunService").RenderStepped:Connect(function()
-                for _, player in ipairs(game.Players:GetPlayers()) do
-                    if player ~= game.Players.LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                        local part = player.Character.HumanoidRootPart
-                        part.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-                        part.Transparency = 0.5
-                        part.Material = Enum.Material.Neon
-                        part.CanCollide = hitboxCollidable
-                    end
-                end
-            end)
-        else
-            if hitboxConnection then
-                hitboxConnection:Disconnect()
-                hitboxConnection = nil
-            end
-            for _, player in ipairs(game.Players:GetPlayers()) do
-                if player ~= game.Players.LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local part = player.Character.HumanoidRootPart
-                    part.Size = Vector3.new(2, 2, 1)
-                    part.Transparency = 0
-                    part.Material = Enum.Material.Plastic
-                    part.CanCollide = true
-                end
+local function applyHitboxSettings()
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= game.Players.LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = player.Character.HumanoidRootPart
+            if hitboxEnabled then
+                hrp.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+                hrp.Transparency = hitboxTransparency
+                hrp.CanCollide = not hitboxNoCollision
+            else
+                hrp.Size = Vector3.new(2, 2, 1)
+                hrp.Transparency = 1
+                hrp.CanCollide = true
             end
         end
     end
-})
+end
 
-MainTab:CreateSlider({
-    Name = "Hitbox Size",
-    Range = {1, 100},
-    Increment = 1,
-    CurrentValue = 10,
-    Callback = function(value)
-        hitboxSize = value
-    end
-})
+MainTab:Toggle("Enable Hitbox Expander", function(state)
+    hitboxEnabled = state
+    applyHitboxSettings()
+end)
 
-MainTab:CreateToggle({
-    Name = "Hitbox Collision",
-    CurrentValue = false,
-    Callback = function(state)
-        hitboxCollidable = state
-    end
-})
+MainTab:Slider("Hitbox Size", 1, 50, hitboxSize, function(value)
+    hitboxSize = value
+    if hitboxEnabled then applyHitboxSettings() end
+end)
 
--- Aimbot Logic
-local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
+MainTab:Toggle("No Collision", function(state)
+    hitboxNoCollision = state
+    if hitboxEnabled then applyHitboxSettings() end
+end)
 
-local aimbotEnabled = false
-local aimbotToggleKey = Enum.KeyCode.Q
-local aimbotFOV = 360
-local aimbotMaxRange = 1000
+MainTab:Slider("Hitbox Transparency", 0, 1, hitboxTransparency, function(value)
+    hitboxTransparency = value
+    if hitboxEnabled then applyHitboxSettings() end
+end)
 
-local UIS = game:GetService("UserInputService")
-local Players = game:GetService("Players")
+game:GetService("RunService").Heartbeat:Connect(function()
+    if hitboxEnabled then applyHitboxSettings() end
+end)
+
+-- Aimlock Tab
+local AimlockTab = Window:Tab("Aimlock", true)
+AimlockTab:Label("Aimlock (Camlock)")
+
+local aimlockEnabled = false
+local isLocked = false
+local lockedTarget = nil
+local camera = workspace.CurrentCamera
+local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local Camera = workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
 
-local currentTarget = nil
+local function getClosestPlayerToCursor()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    local mouseLocation = UserInputService:GetMouseLocation()
 
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Color = Color3.fromRGB(255, 0, 0)
-FOVCircle.Thickness = 2
-FOVCircle.NumSides = 32
-FOVCircle.Radius = aimbotFOV / 2
-FOVCircle.Visible = false
-
-local SnapLine = Drawing.new("Line")
-SnapLine.Color = Color3.fromRGB(255, 0, 0)
-SnapLine.Thickness = 2
-SnapLine.Visible = false
-
-local HeadDot = Drawing.new("Circle")
-HeadDot.Color = Color3.fromRGB(255, 0, 0)
-HeadDot.Thickness = 2
-HeadDot.NumSides = 32
-HeadDot.Radius = 5
-HeadDot.Visible = false
-
-local function updateFOVCircle()
-    local size = Camera.ViewportSize
-    FOVCircle.Position = Vector2.new(size.X / 2, size.Y / 2)
-end
-
-local function updateSnapLine(targetPos)
-    local size = Camera.ViewportSize
-    SnapLine.From = Vector2.new(size.X / 2, size.Y / 2)
-    local screenPoint = Camera:WorldToViewportPoint(targetPos)
-    SnapLine.To = Vector2.new(screenPoint.X, screenPoint.Y)
-    SnapLine.Visible = true
-end
-
-local function updateHeadDot(targetPos)
-    local screenPoint = Camera:WorldToViewportPoint(targetPos)
-    HeadDot.Position = Vector2.new(screenPoint.X, screenPoint.Y)
-    HeadDot.Visible = true
-end
-
-local function isValidTarget(player)
-    return player
-        and player.Character
-        and player.Character:FindFirstChild("Head")
-        and player.Character:FindFirstChild("Humanoid")
-        and player.Character.Humanoid.Health > 0
-end
-
-local function getClosestPlayer()
-    local closest, shortest = nil, math.huge
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and isValidTarget(player) then
-            local head = player.Character.Head
-            local dist = (head.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
-            if dist <= aimbotMaxRange then
-                local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
-                if onScreen then
-                    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-                    local fromCenter = (Vector2.new(screenPoint.X, screenPoint.Y) - screenCenter).Magnitude
-                    if fromCenter <= aimbotFOV / 2 and dist < shortest then
-                        shortest = dist
-                        closest = player
-                    end
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= game.Players.LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = player.Character.HumanoidRootPart
+            local screenPos, onScreen = camera:WorldToViewportPoint(hrp.Position)
+            if onScreen then
+                local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mouseLocation.X, mouseLocation.Y)).Magnitude
+                if dist < shortestDistance then
+                    shortestDistance = dist
+                    closestPlayer = player
                 end
             end
         end
     end
-    return closest
+
+    return closestPlayer
 end
 
-AimbotTab:CreateToggle({
-    Name = "Aimlock Keybind (Q)",
-    CurrentValue = false,
-    Callback = function(state)
-        aimbotEnabled = state
-        FOVCircle.Visible = aimbotEnabled
-        SnapLine.Visible = false
-        HeadDot.Visible = false
-        currentTarget = nil
+AimlockTab:Toggle("Enable Aimlock", function(state)
+    aimlockEnabled = state
+    if not aimlockEnabled then
+        isLocked = false
+        lockedTarget = nil
     end
-})
+end)
 
-UIS.InputBegan:Connect(function(input, gpe)
-    if not gpe and input.KeyCode == aimbotToggleKey then
-        aimbotEnabled = not aimbotEnabled
-        FOVCircle.Visible = aimbotEnabled
-        SnapLine.Visible = false
-        HeadDot.Visible = false
-        currentTarget = nil
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not aimlockEnabled or gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.Q then
+        if isLocked then
+            isLocked = false
+            lockedTarget = nil
+        else
+            local target = getClosestPlayerToCursor()
+            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                lockedTarget = target
+                isLocked = true
+            end
+        end
     end
 end)
 
 RunService.RenderStepped:Connect(function()
-    updateFOVCircle()
+    if isLocked and lockedTarget and lockedTarget.Character and lockedTarget.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = lockedTarget.Character.HumanoidRootPart
+        local camPos = camera.CFrame.Position
+        local targetPos = hrp.Position
 
-    if aimbotEnabled then
-        if not currentTarget or not isValidTarget(currentTarget) then
-            currentTarget = getClosestPlayer()
-        end
-
-        if currentTarget and isValidTarget(currentTarget) then
-            local head = currentTarget.Character.Head
-            updateSnapLine(head.Position)
-            updateHeadDot(head.Position)
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, head.Position)
-        else
-            SnapLine.Visible = false
-            HeadDot.Visible = false
-        end
-    else
-        SnapLine.Visible = false
-        HeadDot.Visible = false
+        local direction = (targetPos - camPos).Unit
+        local newCFrame = CFrame.new(camPos, camPos + direction)
+        camera.CFrame = newCFrame
     end
 end)
 
--- Player Tab (only one instance, guaranteed)
-local PlayerTab = Window:CreateTab("Player", 4483362458)
+-- Target Tab
+local TargetTab = Window:Tab("Target", true)
+TargetTab:Label("Targeting")
 
--- NoClip Toggle
-PlayerTab:CreateToggle({
-    Name = "NoClip",
-    CurrentValue = false,
-    Callback = function(state)
-        if state then
-            _G.NoclipLoop = game:GetService("RunService").Stepped:Connect(function()
-                local char = game.Players.LocalPlayer.Character
-                if char then
-                    for _, part in ipairs(char:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = false
-                        end
-                    end
+local selectedTarget = nil
+
+-- Partial match by display name or username
+local function findClosestMatch(input)
+    input = input:lower()
+    local bestMatch = nil
+    local bestDistance = math.huge
+
+    for _, player in pairs(game.Players:GetPlayers()) do
+        local name = player.DisplayName:lower()
+        local username = player.Name:lower()
+
+        if name:sub(1, #input) == input or username:sub(1, #input) == input then
+            local dist = math.abs(#name - #input)  -- prefer closest length
+            if dist < bestDistance then
+                bestDistance = dist
+                bestMatch = player
+            end
+        end
+    end
+
+    return bestMatch
+end
+
+TargetTab:Textbox("Display Name", "Enter Display Name", function(txt)
+    if #txt > 0 then
+        local player = findClosestMatch(txt)
+        if player then
+            selectedTarget = player
+            print("Target set to:", player.Name)
+        else
+            selectedTarget = nil
+            print("No matching player found.")
+        end
+    else
+        selectedTarget = nil
+    end
+end)
+
+local isSpectating = false
+local cam = workspace.CurrentCamera
+
+TargetTab:Toggle("Spectate Target", function(state)
+    isSpectating = state
+    if isSpectating and selectedTarget and selectedTarget.Character then
+        cam.CameraSubject = selectedTarget.Character:FindFirstChild("Humanoid")
+    else
+        cam.CameraSubject = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") or nil
+    end
+end)
+
+TargetTab:Button("Teleport to Target", function()
+    if selectedTarget and selectedTarget.Character and selectedTarget.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = selectedTarget.Character.HumanoidRootPart
+        local offset = hrp.CFrame.LookVector * -3 -- 3 studs behind target
+        local targetPosition = hrp.Position + offset
+        game.Players.LocalPlayer.Character:SetPrimaryPartCFrame(CFrame.new(targetPosition))
+    else
+        print("Target not valid.")
+    end
+end)
+
+-- Misc Tab
+local MiscTab = Window:Tab("Misc", true)
+MiscTab:Label("Miscellaneous")
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local Noclipping = false
+local InfiniteJumpEnabled = false
+local GodModeEnabled = false
+
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+
+-- Godmode: constantly set health to max
+MiscTab:Toggle("Universal Godmode", function(state)
+    GodModeEnabled = state
+    if GodModeEnabled then
+        spawn(function()
+            while GodModeEnabled do
+                if Humanoid and Humanoid.Health < Humanoid.MaxHealth then
+                    Humanoid.Health = Humanoid.MaxHealth
                 end
-            end)
-        else
-            if _G.NoclipLoop then
-                _G.NoclipLoop:Disconnect()
-                _G.NoclipLoop = nil
+                wait(0.1)
+            end
+        end)
+    end
+end)
+
+-- Infinite Jump
+MiscTab:Toggle("Universal Infinite Jump", function(state)
+    InfiniteJumpEnabled = state
+end)
+
+UserInputService.JumpRequest:Connect(function()
+    if InfiniteJumpEnabled and Humanoid then
+        Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- NoClip
+MiscTab:Toggle("Universal NoClip", function(state)
+    Noclipping = state
+end)
+
+RunService.Stepped:Connect(function()
+    if Noclipping then
+        local char = LocalPlayer.Character
+        if char then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
             end
         end
     end
-})
+end)
 
--- Universal God Mode
-PlayerTab:CreateToggle({
-    Name = "Universal God Mode",
-    CurrentValue = false,
-    Callback = function(state)
-        local char = game.Players.LocalPlayer.Character
-        local hum = char and char:FindFirstChildWhichIsA("Humanoid")
-        if hum then
-            if state then
-                hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-                hum.Health = math.huge
-                hum.MaxHealth = math.huge
-            else
-                hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
-                hum.Health = hum.MaxHealth
-            end
-        end
-    end
-})
-
--- Target Tab (Updated: Teleport, View, and Unview Target)
-local TargetTab = Window:CreateTab("Target", 4483362458)
-
-local matchedPlayer = nil
-
-TargetTab:CreateTextbox({
-    Name = "Target Player (DisplayName/Username)",
-    Text = "",
-    Callback = function(input)
-        matchedPlayer = nil
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player.DisplayName:lower():find(input:lower()) or player.Name:lower():find(input:lower()) then
-                matchedPlayer = player
-                Rayfield:Notify({
-                    Title = "Target Found",
-                    Content = "Matched: " .. player.DisplayName,
-                    Duration = 3
-                })
-                break
-            end
-        end
-        if not matchedPlayer then
-            Rayfield:Notify({
-                Title = "No Match",
-                Content = "Couldn't find a matching player.",
-                Duration = 3
-            })
-        end
-    end
-})
-
--- Teleport to Target
-TargetTab:CreateButton({
-    Name = "Teleport to Target",
-    Callback = function()
-        if matchedPlayer and matchedPlayer.Character and matchedPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            LocalPlayer.Character.HumanoidRootPart.CFrame = matchedPlayer.Character.HumanoidRootPart.CFrame
-            Rayfield:Notify({
-                Title = "Teleported",
-                Content = "You teleported to " .. matchedPlayer.DisplayName,
-                Duration = 3
-            })
-        else
-            Rayfield:Notify({
-                Title = "Teleport Failed",
-                Content = "No valid target selected.",
-                Duration = 3
-            })
-        end
-    end
-})
-
--- View (Spectate) Target
-TargetTab:CreateButton({
-    Name = "View Target",
-    Callback = function()
-        if matchedPlayer and matchedPlayer.Character and matchedPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            Camera.CameraSubject = matchedPlayer.Character.HumanoidRootPart
-            Camera.CameraType = Enum.CameraType.Attach
-            Rayfield:Notify({
-                Title = "Viewing",
-                Content = "You are now spectating " .. matchedPlayer.DisplayName,
-                Duration = 3
-            })
-        else
-            Rayfield:Notify({
-                Title = "View Failed",
-                Content = "No valid target to spectate.",
-                Duration = 3
-            })
-        end
-    end
-})
-
--- Unview Target (Reset camera)
-TargetTab:CreateButton({
-    Name = "Unview Target",
-    Callback = function()
-        Camera.CameraSubject = LocalPlayer.Character:FindFirstChild("Humanoid") or LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
-        Camera.CameraType = Enum.CameraType.Custom
-        Rayfield:Notify({
-            Title = "Camera Reset",
-            Content = "You are no longer spectating.",
-            Duration = 3
-        })
-    end
-})
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    Humanoid = char:WaitForChild("Humanoid")
+end)
