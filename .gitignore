@@ -16,8 +16,12 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
 -- Character references
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
+local function updateCharacter()
+    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    Humanoid = Character:WaitForChild("Humanoid")
+end
+updateCharacter()
+LocalPlayer.CharacterAdded:Connect(updateCharacter)
 
 -- MAIN TAB: Hitbox Expander
 MainTab:Label("Hitbox Expander")
@@ -64,16 +68,15 @@ MainTab:Slider("Hitbox Transparency", 0, 1, function(value)
     if hitboxEnabled then applyHitboxSettings() end
 end)
 
--- Ensure hitbox applies properly when players respawn or join
 Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Connect(function()
-        wait(1)
+        task.wait(1)
         applyHitboxSettings()
     end)
 end)
 
 LocalPlayer.CharacterAdded:Connect(function()
-    wait(1)
+    task.wait(1)
     applyHitboxSettings()
 end)
 
@@ -135,8 +138,7 @@ RunService.RenderStepped:Connect(function()
     if isLocked and lockedTarget and lockedTarget.Character and lockedTarget.Character:FindFirstChild("HumanoidRootPart") then
         local hrp = lockedTarget.Character.HumanoidRootPart
         local camPos = camera.CFrame.Position
-        local targetPos = hrp.Position
-        camera.CFrame = CFrame.new(camPos, targetPos)
+        camera.CFrame = CFrame.new(camPos, hrp.Position)
     end
 end)
 
@@ -147,13 +149,9 @@ local selectedTarget = nil
 
 local function findClosestMatch(input)
     input = input:lower()
-    local bestMatch = nil
-    local bestDistance = math.huge
-
+    local bestMatch, bestDistance = nil, math.huge
     for _, player in pairs(Players:GetPlayers()) do
-        local name = player.DisplayName:lower()
-        local username = player.Name:lower()
-
+        local name, username = player.DisplayName:lower(), player.Name:lower()
         if name:sub(1, #input) == input or username:sub(1, #input) == input then
             local dist = math.abs(#name - #input)
             if dist < bestDistance then
@@ -162,21 +160,11 @@ local function findClosestMatch(input)
             end
         end
     end
-
     return bestMatch
 end
 
 TargetTab:Textbox("Display Name", "Enter Display Name", function(txt)
-    if #txt > 0 then
-        local player = findClosestMatch(txt)
-        if player then
-            selectedTarget = player
-        else
-            selectedTarget = nil
-        end
-    else
-        selectedTarget = nil
-    end
+    selectedTarget = (#txt > 0) and findClosestMatch(txt) or nil
 end)
 
 local isSpectating = false
@@ -186,175 +174,105 @@ TargetTab:Toggle("Spectate Target", function(state)
     if isSpectating and selectedTarget and selectedTarget.Character then
         workspace.CurrentCamera.CameraSubject = selectedTarget.Character:FindFirstChild("Humanoid")
     else
-        workspace.CurrentCamera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") or nil
+        workspace.CurrentCamera.CameraSubject = LocalPlayer.Character:FindFirstChild("Humanoid")
     end
 end)
 
 TargetTab:Button("Teleport to Target", function()
     if selectedTarget and selectedTarget.Character and selectedTarget.Character:FindFirstChild("HumanoidRootPart") then
-        local hrp = selectedTarget.Character.HumanoidRootPart
-        local offset = hrp.CFrame.LookVector * -3
-        local targetPosition = hrp.Position + offset
-        if LocalPlayer.Character and LocalPlayer.Character.PrimaryPart then
-            LocalPlayer.Character:SetPrimaryPartCFrame(CFrame.new(targetPosition))
-        end
+        local offset = selectedTarget.Character.HumanoidRootPart.CFrame.LookVector * -3
+        LocalPlayer.Character:SetPrimaryPartCFrame(CFrame.new(selectedTarget.Character.HumanoidRootPart.Position + offset))
     end
 end)
 
--- CLASSIC FLING IMPLEMENTATION
-local flingActive = false
-local flingWeld = nil
-local flingSpinConnection = nil
-local originalCFrame = nil
+-- Classic Fling
+local flingActive, flingWeld, flingSpinConnection, originalCFrame = false, nil, nil, nil
 
 local function getRootPart(character)
-    if character:FindFirstChild("HumanoidRootPart") then
-        return character.HumanoidRootPart
-    elseif character:FindFirstChild("Torso") then
-        return character.Torso
-    else
-        return nil
-    end
+    return character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
 end
 
 local function startFling(targetPlayer)
     if flingActive then return end
-    local character = LocalPlayer.Character
-    if not character or not character.Parent then return end
+    local rootPart, targetRootPart = getRootPart(LocalPlayer.Character), getRootPart(targetPlayer.Character)
+    if not rootPart or not targetRootPart then return end
+    originalCFrame, flingActive = rootPart.CFrame, true
 
-    local rootPart = getRootPart(character)
-    if not rootPart then return end
-
-    if not targetPlayer or not targetPlayer.Character or not targetPlayer.Character.Parent then return end
-    local targetRootPart = getRootPart(targetPlayer.Character)
-    if not targetRootPart then return end
-
-    -- Save original position so we can teleport back later
-    originalCFrame = rootPart.CFrame
-
-    flingActive = true
-
-    -- Weld local player root to target root
-    flingWeld = Instance.new("WeldConstraint")
-    flingWeld.Part0 = rootPart
-    flingWeld.Part1 = targetRootPart
-    flingWeld.Parent = rootPart
-
-    -- Spin your character quickly to fling
-    local angle = 0
+    flingWeld = Instance.new("WeldConstraint", rootPart)
+    flingWeld.Part0, flingWeld.Part1 = rootPart, targetRootPart
 
     flingSpinConnection = RunService.Heartbeat:Connect(function(dt)
         if not flingActive then return end
-        angle = angle + (dt * 50) -- Adjust spin speed for fling force
+        local angle = tick() * 50
         rootPart.CFrame = targetRootPart.CFrame * CFrame.Angles(0, math.rad(angle), 0) * CFrame.new(0, 0, 3)
     end)
 end
 
 local function stopFling()
-    if not flingActive then return end
-
     flingActive = false
-
-    -- Remove weld and stop spinning
-    if flingWeld then
-        flingWeld:Destroy()
-        flingWeld = nil
-    end
-
-    if flingSpinConnection then
-        flingSpinConnection:Disconnect()
-        flingSpinConnection = nil
-    end
-
-    -- Teleport back to original position safely
-    local character = LocalPlayer.Character
-    if not character or not character.Parent then return end
-
-    local rootPart = getRootPart(character)
-    if rootPart and originalCFrame then
-        rootPart.CFrame = originalCFrame
-    end
+    if flingWeld then flingWeld:Destroy() end
+    if flingSpinConnection then flingSpinConnection:Disconnect() end
+    local rootPart = getRootPart(LocalPlayer.Character)
+    if rootPart and originalCFrame then rootPart.CFrame = originalCFrame end
 end
 
 TargetTab:Toggle("Fling Target", function(state)
-    if state and selectedTarget then
-        startFling(selectedTarget)
-    else
-        stopFling()
-    end
+    if state and selectedTarget then startFling(selectedTarget) else stopFling() end
 end)
 
--- Stop fling on character respawn
 LocalPlayer.CharacterAdded:Connect(function()
+    updateCharacter()
     stopFling()
-    Character = LocalPlayer.Character
-    Humanoid = Character:WaitForChild("Humanoid")
 end)
 
 -- MISC TAB
 MiscTab:Label("Miscellaneous Features")
 
--- WalkSpeed feature variables
-local walkSpeedEnabled = false
-local walkSpeedValue = 16
-local walkSpeedKeybind = Enum.KeyCode.C
-local walkSpeedActive = false
+-- WalkSpeed
+local walkSpeedEnabled, walkSpeedActive = false, false
+local walkSpeedValue, walkSpeedKeybind = 16, Enum.KeyCode.C
 
-local function setWalkSpeed(speed)
+local function updateWalkSpeed()
     if Humanoid then
-        Humanoid.WalkSpeed = speed
+        Humanoid.WalkSpeed = (walkSpeedEnabled and walkSpeedActive) and walkSpeedValue or 16
     end
 end
 
 MiscTab:Toggle("Enable WalkSpeed", function(state)
     walkSpeedEnabled = state
-    if not walkSpeedEnabled then
-        walkSpeedActive = false
-        setWalkSpeed(16)
-    else
-        walkSpeedActive = UserInputService:IsKeyDown(walkSpeedKeybind) and walkSpeedKeybind ~= Enum.KeyCode.None
-        setWalkSpeed(walkSpeedActive and walkSpeedValue or 16)
-    end
+    updateWalkSpeed()
 end)
 
 MiscTab:Slider("WalkSpeed Value", 16, 100, function(value)
     walkSpeedValue = value
-    if walkSpeedEnabled and walkSpeedActive then
-        setWalkSpeed(walkSpeedValue)
-    end
+    updateWalkSpeed()
 end)
 
 MiscTab:Keybind("WalkSpeed Keybind", walkSpeedKeybind, function(key)
     walkSpeedKeybind = key
-    walkSpeedActive = UserInputService:IsKeyDown(walkSpeedKeybind) and walkSpeedEnabled and walkSpeedKeybind ~= Enum.KeyCode.None
-    setWalkSpeed(walkSpeedActive and walkSpeedValue or 16)
 end)
 
--- Listen to key press/release for walk speed activation
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    if walkSpeedEnabled and input.KeyCode == walkSpeedKeybind then
-        walkSpeedActive = true
-        setWalkSpeed(walkSpeedValue)
+    if input.KeyCode == walkSpeedKeybind then
+        walkSpeedActive = not walkSpeedActive
+        updateWalkSpeed()
     end
 end)
 
-UserInputService.InputEnded:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if walkSpeedEnabled and input.KeyCode == walkSpeedKeybind then
-        walkSpeedActive = false
-        setWalkSpeed(16)
-    end
-end)
+-- Infinite Jump
+local infiniteJumpEnabled = false
+local jumpConnection
 
--- Update Humanoid reference on respawn and apply walk speed if needed
-LocalPlayer.CharacterAdded:Connect(function(char)
-    Character = char
-    Humanoid = char:WaitForChild("Humanoid")
-    if walkSpeedEnabled and walkSpeedActive then
-        setWalkSpeed(walkSpeedValue)
-    else
-        setWalkSpeed(16)
+MiscTab:Toggle("Infinite Jump", function(state)
+    infiniteJumpEnabled = state
+    if jumpConnection then jumpConnection:Disconnect() end
+    if infiniteJumpEnabled then
+        jumpConnection = UserInputService.JumpRequest:Connect(function()
+            if infiniteJumpEnabled and Humanoid then
+                Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
     end
 end)
 
@@ -370,15 +288,14 @@ SettingsTab:Button("Refresh GUI", function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/Mapple7777/UI-Librarys/main/UI-1/UI.lua"))()
 end)
 
-SettingsTab:Toggle("Toggle UI Keybind (Right Shift)", function(state)
-    -- This example assumes Library has a function to toggle visibility
-    -- Adjust if your library uses a different method
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.KeyCode == Enum.KeyCode.RightShift then
-            Window:Toggle() -- assuming this toggles visibility
-        end
-    end)
+local toggleKey = Enum.KeyCode.RightShift
+SettingsTab:Keybind("Toggle UI Key", toggleKey, function(key)
+    toggleKey = key
 end)
 
--- END OF SCRIPT
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == toggleKey then
+        Window:Toggle()
+    end
+end)
